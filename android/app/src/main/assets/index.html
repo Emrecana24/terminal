@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <link rel="stylesheet" href="xterm.css" />
+  <script src="xterm.js"></script>
+  <script src="xterm-addon-fit.js"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+
+    #navbar {
+      height: 40px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      user-select: none;
+      z-index: 100;
+      position: relative;
+    }
+    .tabs { display: flex; gap: 4px; }
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #8b949e;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tab-btn.active { background: #21262d; color: #f0f6fc; border-color: #30363d; }
+
+    .nav-actions { display: flex; align-items: center; gap: 8px; }
+    #res-badge {
+      font-family: monospace;
+      font-size: 11px;
+      color: #58a6ff;
+      background: #21262d;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #30363d;
+    }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #da3633; transition: background 0.3s; }
+    .status-dot.connected { background: #238636; box-shadow: 0 0 6px rgba(35, 134, 54, 0.7); }
+    .btn-settings { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+
+    .view-container {
+      height: calc(100% - 40px);
+      width: 100%;
+      position: relative;
+      background: #000;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Terminal Çerçevesi (Ölçeklenen Bölüm) */
+    #terminal-view {
+      height: 100%;
+      width: 100%;
+      display: block;
+      background: #0d1117;
+      transform-origin: top center;
+      transition: transform 0.12s ease-out;
+    }
+    #files-view { height: 100%; width: 100%; display: none; background: #0d1117; flex-direction: column; }
+
+    #path-bar {
+      padding: 6px 10px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #current-path {
+      flex: 1;
+      font-family: monospace;
+      font-size: 11px;
+      color: #58a6ff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .btn-path {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    #file-list { flex: 1; overflow-y: auto; padding: 6px 12px; }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 8px;
+      border-bottom: 1px solid #21262d;
+      user-select: none;
+    }
+    .file-item:active { background: #161b22; }
+    .file-icon { font-size: 18px; width: 24px; text-align: center; }
+    .file-info { flex: 1; min-width: 0; }
+    .file-name { font-size: 13px; color: #f0f6fc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-meta { font-size: 11px; color: #8b949e; margin-top: 1px; }
+
+    #action-sheet {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 120;
+      align-items: flex-end;
+    }
+    #action-sheet.open { display: flex; }
+    .sheet-box {
+      width: 100%;
+      background: #161b22;
+      border-top-left-radius: 14px;
+      border-top-right-radius: 14px;
+      padding: 18px;
+      border-top: 1px solid #30363d;
+    }
+    .sheet-title { font-size: 14px; font-weight: bold; color: #f0f6fc; margin-bottom: 14px; word-break: break-all; }
+    .sheet-btn {
+      width: 100%;
+      padding: 12px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: #f0f6fc;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sheet-btn.cancel { background: transparent; border-color: transparent; color: #8b949e; margin-top: 6px; }
+
+    #reader-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0d1117;
+      z-index: 130;
+      flex-direction: column;
+    }
+    #reader-modal.open { display: flex; }
+    .reader-header {
+      height: 44px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+    }
+    .reader-title { font-size: 13px; font-family: monospace; color: #58a6ff; }
+    .reader-close { background: #21262d; border: 1px solid #30363d; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 12px; }
+    #reader-content {
+      flex: 1;
+      padding: 12px;
+      overflow: auto;
+      font-family: monospace;
+      font-size: 12px;
+      color: #c9d1d9;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 0;
+    }
+
+    #settings-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 110;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #settings-modal.open { display: flex; }
+    .modal-box { background: #161b22; border: 1px solid #30363d; border-radius: 10px; width: 100%; max-width: 340px; padding: 20px; color: #c9d1d9; }
+    .modal-box h3 { margin: 0 0 14px 0; font-size: 16px; color: #fff; }
+    .input-group { margin-bottom: 14px; }
+    .input-group label { display: block; font-size: 12px; margin-bottom: 6px; color: #8b949e; }
+    .input-group input { width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #fff; padding: 8px 10px; font-size: 13px; }
+
+    .font-control {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 12px;
+      margin-bottom: 8px;
+    }
+    .font-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    #font-label { font-family: monospace; font-weight: bold; color: #58a6ff; font-size: 14px; }
+
+    .preset-btns { display: flex; gap: 6px; }
+    .preset-btn {
+      flex: 1;
+      padding: 6px 0;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #c9d1d9;
+      font-size: 11px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .btn-save { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 8px 14px; font-weight: 600; font-size: 13px; }
+    .btn-cancel { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 8px 14px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="navbar">
+    <div class="tabs">
+      <button id="tab-terminal" class="tab-btn active" onclick="switchTab('terminal')">&gt;_ Terminal</button>
+      <button id="tab-files" class="tab-btn" onclick="switchTab('files')">📁 Dosyalar</button>
+    </div>
+    <div class="nav-actions">
+      <span id="res-badge">...</span>
+      <div id="status-dot" class="status-dot"></div>
+      <button class="btn-settings" onclick="openSettings()">⚙️</button>
+    </div>
+  </div>
+
+  <div class="view-container">
+    <div id="terminal-view"></div>
+    <div id="files-view">
+      <div id="path-bar">
+        <button class="btn-path" onclick="goUpDir()">⬆ Üst Dizin</button>
+        <span id="current-path">/workspaces/terminal</span>
+        <button class="btn-path" onclick="loadFiles(currentDir)">🔄</button>
+      </div>
+      <div id="file-list"></div>
+    </div>
+  </div>
+
+  <div id="action-sheet" onclick="closeSheet(event)">
+    <div class="sheet-box" onclick="event.stopPropagation()">
+      <div id="sheet-filename" class="sheet-title">dosya.txt</div>
+      <button id="sheet-btn-read" class="sheet-btn" onclick="openInReader()">👁️ Burada Aç / Oku</button>
+      <button id="sheet-btn-download" class="sheet-btn" onclick="downloadSelectedFile()">📥 İndir (İndirilenler/Terminal)</button>
+      <button class="sheet-btn cancel" onclick="closeSheet()">Vazgeç</button>
+    </div>
+  </div>
+
+  <div id="reader-modal">
+    <div class="reader-header">
+      <span id="reader-filename" class="reader-title">okunuyor...</span>
+      <button class="reader-close" onclick="closeReader()">Kapat</button>
+    </div>
+    <pre id="reader-content"></pre>
+  </div>
+
+  <div id="settings-modal">
+    <div class="modal-box">
+      <h3>Terminal Ayarları</h3>
+      <div class="input-group">
+        <label>Codespace WebSocket URL</label>
+        <input id="input-url" type="text" placeholder="wss://...app.github.dev" />
+      </div>
+
+      <div class="input-group">
+        <label>Metin Boyutu / Çözünürlük</label>
+        <div class="font-control">
+          <div class="font-btn" onclick="changeFontSize(-1)">-</div>
+          <span id="font-label">8px</span>
+          <div class="font-btn" onclick="changeFontSize(1)">+</div>
+        </div>
+        <div class="preset-btns">
+          <div class="preset-btn" onclick="applyPreset(12)">12px</div>
+          <div class="preset-btn" onclick="applyPreset(10)">10px</div>
+          <div class="preset-btn" onclick="applyPreset(8)">8px (Net & Geniş)</div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeSettings()">Kapat</button>
+        <button class="btn-save" onclick="saveSettings()">Kaydet & Bağlan</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let userFontSize = parseInt(localStorage.getItem('cs_font_size') || '8');
+    let baseFullHeight = window.innerHeight;
+    let baseFullWidth = window.innerWidth;
+    let isKeyboardScaleActive = false;
+
+    function switchTab(tab) {
+      document.getElementById('tab-terminal').classList.toggle('active', tab === 'terminal');
+      document.getElementById('tab-files').classList.toggle('active', tab === 'files');
+      
+      const termView = document.getElementById('terminal-view');
+      const filesView = document.getElementById('files-view');
+
+      if (tab === 'terminal') {
+        termView.style.display = 'block';
+        filesView.style.display = 'none';
+        fitAddon.fit();
+        updateResolution();
+      } else {
+        termView.style.display = 'none';
+        filesView.style.display = 'flex';
+        loadFiles(currentDir);
+      }
+    }
+
+    const term = new Terminal({
+      cursorBlink: true,
+      fontFamily: '"DejaVu Sans Mono", monospace',
+      fontSize: userFontSize,
+      lineHeight: 1.1,
+      theme: { background: '#0d1117', foreground: '#c9d1d9', cursor: '#58a6ff' }
+    });
+
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal-view'));
+    fitAddon.fit();
+
+    function updateResolution() {
+      const badge = document.getElementById('res-badge');
+      if (badge && term) badge.innerText = `${term.cols}x${term.rows}`;
+    }
+    setTimeout(updateResolution, 500);
+
+    // --- KLAVYE AÇILINCA TÜM PENCEREYİ ORANTILI KÜÇÜLTME MOTORU ---
+    function handleViewport() {
+      const currentHeight = window.innerHeight;
+      const heightDiff = baseFullHeight - currentHeight;
+      const termEl = document.getElementById('terminal-view');
+
+      // Klavye açıldıysa (yükseklik 140px'den fazla azaldıysa)
+      if (heightDiff > 140) {
+        isKeyboardScaleActive = true;
+        const availableHeight = currentHeight - 40; // navbar hariç kalan yükseklik
+        const originalHeight = baseFullHeight - 40;
+        const scale = availableHeight / originalHeight; // orantılı küçülme katsayısı
+
+        termEl.style.width = baseFullWidth + 'px';
+        termEl.style.height = originalHeight + 'px';
+        termEl.style.transform = `scale(${scale})`;
+        termEl.style.transformOrigin = 'top center';
+      } else {
+        // Klavye kapandı: Tam ekran orijinal haline dön
+        if (isKeyboardScaleActive) {
+          isKeyboardScaleActive = false;
+          baseFullHeight = currentHeight;
+          baseFullWidth = window.innerWidth;
+
+          termEl.style.width = '100%';
+          termEl.style.height = '100%';
+          termEl.style.transform = 'none';
+          
+          fitAddon.fit();
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+          }
+          updateResolution();
+        } else {
+          baseFullHeight = currentHeight;
+          baseFullWidth = window.innerWidth;
+        }
+      }
+    }
+
+    window.addEventListener('resize', handleViewport);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewport);
+    }
+
+    function fixIME() {
+      const ta = term.textarea;
+      if (ta) {
+        ta.setAttribute('autocapitalize', 'none');
+        ta.setAttribute('autocomplete', 'off');
+        ta.setAttribute('autocorrect', 'off');
+        ta.setAttribute('spellcheck', 'false');
+      }
+    }
+    setTimeout(fixIME, 300);
+    term.onRender(fixIME);
+
+    let socket = null;
+    let wsUrl = localStorage.getItem('cs_terminal_url') || '';
+    let reconnectTimeout = null;
+
+    function getHttpBaseUrl() {
+      if (!wsUrl) return '';
+      return wsUrl.replace('wss://', 'https://').replace('ws://', 'http://');
+    }
+
+    function connectTerminal() {
+      if (!wsUrl) return openSettings();
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+
+      term.writeln("\r\n\x1b[33mCodespace'e bağlanılıyor...\x1b[0m");
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        clearTimeout(reconnectTimeout);
+        document.getElementById('status-dot').classList.add('connected');
+        term.writeln("\x1b[32m[+] Canlı Bash Terminali Hazır!\x1b[0m\r\n");
+        socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+        updateResolution();
+      };
+
+      socket.onmessage = e => term.write(e.data);
+
+      socket.onclose = () => {
+        document.getElementById('status-dot').classList.remove('connected');
+        term.writeln("\r\n\x1b[31m[-] Bağlantı koptu. Yeniden bağlanılıyor...\x1b[0m\r\n");
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = setTimeout(connectTerminal, 2500);
+      };
+
+      socket.onerror = () => {
+        document.getElementById('status-dot').classList.remove('connected');
+      };
+    }
+
+    term.onData(data => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'input', data: data }));
+      }
+    });
+
+    function changeFontSize(delta) {
+      applyPreset(userFontSize + delta);
+    }
+
+    function applyPreset(size) {
+      userFontSize = Math.max(6, Math.min(24, size));
+      document.getElementById('font-label').innerText = userFontSize + 'px';
+      localStorage.setItem('cs_font_size', userFontSize);
+      term.options.fontSize = userFontSize;
+      fitAddon.fit();
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      }
+      updateResolution();
+    }
+
+    // Dosya Yöneticisi Fonksiyonları
+    let currentDir = '/workspaces/terminal';
+    let parentDir = '/workspaces';
+    let selectedItem = null;
+
+    function formatSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024, dm = 1;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    function loadFiles(dir) {
+      const httpBase = getHttpBaseUrl();
+      if (!httpBase) return;
+
+      const listContainer = document.getElementById('file-list');
+      listContainer.innerHTML = '<div style="padding:20px; color:#8b949e; text-align:center;">Dizin taranıyor...</div>';
+
+      fetch(`${httpBase}/api/list?dir=${encodeURIComponent(dir)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) {
+            listContainer.innerHTML = `<div style="padding:20px; color:#da3633;">Hata: ${data.error}</div>`;
+            return;
+          }
+          currentDir = data.currentDir;
+          parentDir = data.parentDir;
+          document.getElementById('current-path').innerText = currentDir;
+          renderFileList(data.items);
+        })
+        .catch(err => {
+          listContainer.innerHTML = `<div style="padding:20px; color:#da3633;">Bağlantı Hatası: ${err.message}</div>`;
+        });
+    }
+
+    function goUpDir() {
+      if (parentDir && parentDir !== currentDir) loadFiles(parentDir);
+    }
+
+    function renderFileList(items) {
+      const container = document.getElementById('file-list');
+      container.innerHTML = '';
+
+      if (items.length === 0) {
+        container.innerHTML = '<div style="padding:20px; color:#8b949e; text-align:center;">Klasör boş</div>';
+        return;
+      }
+
+      items.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'file-item';
+
+        const icon = item.isDir ? '📁' : '📄';
+        const meta = item.isDir ? 'Klasör' : formatSize(item.size);
+
+        row.innerHTML = `
+          <div class="file-icon">${icon}</div>
+          <div class="file-info">
+            <div class="file-name">${item.name}</div>
+            <div class="file-meta">${meta}</div>
+          </div>
+        `;
+
+        let pressTimer = null;
+        let isLongPress = false;
+        let startX = 0, startY = 0;
+
+        row.addEventListener('touchstart', (e) => {
+          isLongPress = false;
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+          pressTimer = setTimeout(() => {
+            isLongPress = true;
+            if (navigator.vibrate) navigator.vibrate(40);
+            openActionSheet(item);
+          }, 550);
+        }, { passive: true });
+
+        row.addEventListener('touchmove', (e) => {
+          const dx = Math.abs(e.touches[0].clientX - startX);
+          const dy = Math.abs(e.touches[0].clientY - startY);
+          if (dx > 10 || dy > 10) clearTimeout(pressTimer);
+        }, { passive: true });
+
+        row.addEventListener('touchend', () => {
+          clearTimeout(pressTimer);
+          if (!isLongPress && item.isDir) {
+            loadFiles(item.fullPath);
+          }
+        });
+
+        row.addEventListener('contextmenu', e => { e.preventDefault(); openActionSheet(item); });
+        container.appendChild(row);
+      });
+    }
+
+    function openActionSheet(item) {
+      selectedItem = item;
+      document.getElementById('sheet-filename').innerText = item.name;
+      document.getElementById('sheet-btn-read').style.display = item.isDir ? 'none' : 'flex';
+      document.getElementById('sheet-btn-download').innerText = item.isDir ? '📁 Klasörü İndir (Zip Yok)' : '📥 İndir (İndirilenler/Terminal)';
+      document.getElementById('action-sheet').classList.add('open');
+    }
+
+    function closeSheet() {
+      document.getElementById('action-sheet').classList.remove('open');
+    }
+
+    function openInReader() {
+      if (!selectedItem || selectedItem.isDir) return;
+      closeSheet();
+      const modal = document.getElementById('reader-modal');
+      const contentEl = document.getElementById('reader-content');
+      document.getElementById('reader-filename').innerText = selectedItem.name;
+      contentEl.innerText = 'Yükleniyor...';
+      modal.classList.add('open');
+
+      const httpBase = getHttpBaseUrl();
+      fetch(`${httpBase}/api/read?file=${encodeURIComponent(selectedItem.fullPath)}`)
+        .then(r => r.json())
+        .then(data => {
+          contentEl.innerText = data.content || data.error || 'İçerik boş.';
+        })
+        .catch(err => {
+          contentEl.innerText = 'Okuma Hatası: ' + err.message;
+        });
+    }
+
+    function closeReader() {
+      document.getElementById('reader-modal').classList.remove('open');
+    }
+
+    function downloadSelectedFile() {
+      if (!selectedItem || selectedItem.isDir) {
+        alert("Klasör indirme desteklenmiyor.");
+        closeSheet();
+        return;
+      }
+      closeSheet();
+      const httpBase = getHttpBaseUrl();
+      const downloadUrl = `${httpBase}/api/download?file=${encodeURIComponent(selectedItem.fullPath)}`;
+
+      if (window.AndroidBridge && window.AndroidBridge.downloadFile) {
+        window.AndroidBridge.downloadFile(downloadUrl, selectedItem.name);
+      } else {
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = selectedItem.name;
+        a.click();
+      }
+    }
+
+    function openSettings() {
+      document.getElementById('input-url').value = wsUrl;
+      document.getElementById('font-label').innerText = userFontSize + 'px';
+      document.getElementById('settings-modal').classList.add('open');
+    }
+    function closeSettings() {
+      document.getElementById('settings-modal').classList.remove('open');
+    }
+    function saveSettings() {
+      const url = document.getElementById('input-url').value.trim();
+      if (url) {
+        wsUrl = url;
+        localStorage.setItem('cs_terminal_url', url);
+        closeSettings();
+        connectTerminal();
+      }
+    }
+
+    if (wsUrl) connectTerminal();
+    else openSettings();
+  </script>
+</body>
+</html>

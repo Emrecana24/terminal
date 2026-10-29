@@ -1,0 +1,10 @@
+{
+  "name": "Codespace Terminal",
+  "portsAttributes": {
+    "8080": {
+      "label": "Terminal WebSocket",
+      "onAutoForward": "silent",
+      "visibility": "public"
+    }
+  }
+}

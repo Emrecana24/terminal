@@ -1,0 +1,8 @@
+========================================================
+ÇALIŞTIRILAN KOMUT:
+Kaynak kodlar GitHub'a push ediliyor ve CodespaceTerminal.apk GitHub Releases'a yayınlanıyor.
+========================================================
+KOMUT ÇIKTISI:
+=== 1. Git Ignore Yapılandırılıyor (Çöpler Hariç Tutuluyor) ===
+=== 2. Git Kimliği Doğrulanıyor ===
+=== 3. Kodlar Git'e Ekleniyor ve Push Ediliyor ===
