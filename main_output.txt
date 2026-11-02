@@ -4966,3 +4966,57 @@ BUILD SUCCESSFUL in 29s
 Konum: /workspaces/terminal/CodespaceTerminal.apk
 Dosya Boyutu: 347K
 ==========================================================
+
+
+========================================================
+İŞLEM TARİHİ: 2026-11-02 15:44:20
+========================================================
+ÇALIŞTIRILAN KOMUT METNİ (KODUN TAMAMI):
+========================================================
+echo "=== 1. Eski Sunucu Süreçleri Temizleniyor ==="
+pkill -f 'node.*server.js' 2>/dev/null || true
+sleep 1
+
+echo "=== 2. Sunucu Arka Planda Başlatılıyor ==="
+cd /workspaces/terminal/server
+nohup node /workspaces/terminal/server/server.js > /workspaces/terminal/server.log 2>&1 &
+sleep 2
+
+echo "=== 3. Yerel Bağlantı Kontrolü (localhost:8080) ==="
+curl -s http://127.0.0.1:8080 || echo "[!] Sunucu henüz yanıt vermiyor, server.log dosyasını inceleyin."
+echo ""
+
+echo "=== 4. 8080 Portu Dış Dünyaya Açılıyor (PUBLIC) ==="
+CODESPACE_NAME="${CODESPACE_NAME:-$(gh codespace list --json name -q '.[0].name 2>/dev/null')}"
+gh codespace ports forward 8080:8080 -c "$CODESPACE_NAME" 2>/dev/null || true
+gh codespace ports visibility 8080:public -c "$CODESPACE_NAME" 2>/dev/null || gh codespace ports visibility 8080:public 2>/dev/null || true
+
+echo "--- Aktif Bağlantı Noktaları: ---"
+gh codespace ports -c "$CODESPACE_NAME" 2>/dev/null || true
+
+DOMAIN="${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-app.github.dev}"
+URL="wss://${CODESPACE_NAME}-8080.${DOMAIN}"
+
+echo ""
+echo "=========================================================="
+echo "SUNUCU BAŞARIYLA BAŞLATILDI!"
+echo "TELEFONDAKİ UYGULAMAYA YAZACAĞIN GÜNCEL ADRES:"
+echo "$URL"
+echo "=========================================================="
+
+========================================================
+KOMUT ÇIKTISI:
+========================================================
+=== 1. Eski Sunucu Süreçleri Temizleniyor ===
+=== 2. Sunucu Arka Planda Başlatılıyor ===
+=== 3. Yerel Bağlantı Kontrolü (localhost:8080) ===
+Codespace Server Aktif
+=== 4. 8080 Portu Dış Dünyaya Açılıyor (PUBLIC) ===
+--- Aktif Bağlantı Noktaları: ---
+Terminal WebSocket	8080	public	https://fuzzy-space-system-pjj7vxwg7w76f6x4v-8080.app.github.dev
+
+==========================================================
+SUNUCU BAŞARIYLA BAŞLATILDI!
+TELEFONDAKİ UYGULAMAYA YAZACAĞIN GÜNCEL ADRES:
+wss://fuzzy-space-system-pjj7vxwg7w76f6x4v-8080.app.github.dev
+==========================================================
