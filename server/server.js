@@ -1,15 +1,15 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 const WebSocket = require('ws');
 const pty = require('node-pty');
 
 const ROOT_DIR = '/workspaces/terminal';
 
 const server = http.createServer((req, res) => {
-    // CORS İzinleri
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', '*');
 
     if (req.method === 'OPTIONS') {
@@ -20,7 +20,31 @@ const server = http.createServer((req, res) => {
 
     const reqUrl = new URL(req.url, `http://${req.headers.host}`);
 
-    // 1. Dizin Listeleme API
+    // AI İçin Doğrudan Komut Çalıştırma Motoru
+    if (reqUrl.pathname === '/api/exec' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { command } = JSON.parse(body);
+                exec(command, { cwd: ROOT_DIR, maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
+                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({
+                        stdout: stdout || '',
+                        stderr: stderr || '',
+                        exitCode: error ? error.code : 0,
+                        error: error ? error.message : null
+                    }));
+                });
+            } catch(e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Dosya Listeleme API
     if (reqUrl.pathname === '/api/list') {
         let targetDir = reqUrl.searchParams.get('dir') || ROOT_DIR;
         try {
@@ -29,9 +53,7 @@ const server = http.createServer((req, res) => {
             const list = entries.map(e => {
                 let size = 0;
                 try {
-                    if (!e.isDirectory()) {
-                        size = fs.statSync(path.join(targetDir, e.name)).size;
-                    }
+                    if (!e.isDirectory()) size = fs.statSync(path.join(targetDir, e.name)).size;
                 } catch(err) {}
                 return {
                     name: e.name,
@@ -40,19 +62,9 @@ const server = http.createServer((req, res) => {
                     fullPath: path.join(targetDir, e.name)
                 };
             });
-
-            // Klasörler önce, alfabetik sıra
-            list.sort((a, b) => {
-                if (a.isDir === b.isDir) return a.name.localeCompare(b.name);
-                return a.isDir ? -1 : 1;
-            });
-
+            list.sort((a, b) => (a.isDir === b.isDir) ? a.name.localeCompare(b.name) : (a.isDir ? -1 : 1));
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(JSON.stringify({
-                currentDir: targetDir,
-                parentDir: path.dirname(targetDir),
-                items: list
-            }));
+            res.end(JSON.stringify({ currentDir: targetDir, parentDir: path.dirname(targetDir), items: list }));
         } catch (err) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: err.message }));
@@ -60,7 +72,7 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // 2. Metin Olarak Okuma API
+    // Dosya Okuma API
     if (reqUrl.pathname === '/api/read') {
         const filePath = reqUrl.searchParams.get('file');
         try {
@@ -69,12 +81,12 @@ const server = http.createServer((req, res) => {
             res.end(JSON.stringify({ content, name: path.basename(filePath) }));
         } catch (err) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Dosya okunamadı: ' + err.message }));
+            res.end(JSON.stringify({ error: 'Okunamadı: ' + err.message }));
         }
         return;
     }
 
-    // 3. Dosya İndirme API
+    // Dosya İndirme API
     if (reqUrl.pathname === '/api/download') {
         const filePath = reqUrl.searchParams.get('file');
         try {
@@ -94,11 +106,9 @@ const server = http.createServer((req, res) => {
     res.end('Codespace Server Aktif');
 });
 
-// Saf Bash Terminal WebSocket
+// PTY Bash Terminal WebSocket
 const wss = new WebSocket.Server({ server });
-
 wss.on('connection', (ws) => {
-    console.log('[+] Mobil bağlandı');
     const shell = process.env.SHELL || 'bash';
     const ptyProcess = pty.spawn(shell, [], {
         name: 'xterm-256color',
@@ -108,9 +118,7 @@ wss.on('connection', (ws) => {
         env: process.env
     });
 
-    ptyProcess.onData(data => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(data);
-    });
+    ptyProcess.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(data); });
 
     ws.on('message', message => {
         try {
@@ -122,11 +130,9 @@ wss.on('connection', (ws) => {
         }
     });
 
-    ws.on('close', () => {
-        ptyProcess.kill();
-    });
+    ws.on('close', () => ptyProcess.kill());
 });
 
 server.listen(8080, '0.0.0.0', () => {
-    console.log('Sunucu 8080 portunda aktif (Bash + Dosya Yöneticisi)');
+    console.log('Sunucu 8080 portunda aktif (AI Exec + Bash + Files)');
 });
